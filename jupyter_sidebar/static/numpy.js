@@ -3,8 +3,8 @@
 /* global define */
 
 define(
-  ['require', 'jquery', 'nbextensions/jupyter_sidebar/sidebar'],
-  (require, $, sidebarmod) => {
+  ['jquery', 'base/js/namespace', 'base/js/events', 'nbextensions/jupyter_sidebar/sidebar'],
+  ($, env, events, sidebarmod) => {
     /**
      * Numpy Variable Inspector widget
      * @class NumpyTable 
@@ -17,14 +17,14 @@ define(
 
     function NumpyTable({ notebook, events }) {
       Table.call(this, {
+        notebook: notebook,
         header: 'Numpy Variables Inspector',
         nColumn: 4
       });
-      this.id = 'numpy-variables-inspector';
       this.notebook = notebook;
       this.events = events;
 
-      Table.prototype.update.call(this, {
+      this.update.call(this, {
         onRender: ([module, name, type, shape, addr]) => [
           (module === '__main__' ? '' : `<span class=jsb_module>${module}.</span>`) + name,
           `<span class='jsb_type ${NumpyTable._get_type_class(type)}'>${type}</span>`,
@@ -41,7 +41,7 @@ define(
       });
 
       this.callback = () => {
-        if (this.element.hasClass('collapsed')) return;
+        if (this.config.get('collapsed')) return;
         this.update_from_kernel();
       };
       NumpyTable.prototype.bind_events.call(this);
@@ -64,8 +64,8 @@ define(
 
     NumpyTable.prototype._shell_reply_handler = function(text) {
       const data = JSON.parse(text);
-      Table.prototype.update.call(this, { data: data });
-      Table.prototype.update_info.call(this, data.length === 0 ? 'No Numpy variable' : '');
+      this.update.call(this, { data: data });
+      this.update_info.call(this, data.length === 0 ? 'No Numpy variable' : '');
     };
 
     NumpyTable.prototype.update_from_kernel = function() {
@@ -77,15 +77,22 @@ _jsb_numpy_report()`;
         .then(NumpyTable.prototype._shell_reply_handler.bind(this));
     };
 
+    // @final
     NumpyTable.prototype.bind_events = function() {
       this.events.on('kernel_ready.Kernel', this.callback);
       this.events.on('finished_execute.CodeCell', this.callback);
       if (this.notebook.kernel !== null) this.callback();
     };
 
+    // @final
     NumpyTable.prototype.unbind_events = function() {
       this.events.off('kernel_ready.Kernel', this.callback);
       this.events.off('finished_execute.CodeCell', this.callback);
+    };
+
+    NumpyTable.prototype.expand = function() {
+      sidebarmod.Widget.prototype.expand.call(this);
+      this.callback();
     };
 
     NumpyTable.prototype.remove = function() {
@@ -93,6 +100,8 @@ _jsb_numpy_report()`;
       Table.prototype.remove.call(this);
     };
 
-    return { NumpyTable: NumpyTable };
+    const create_numpy_table = () => new NumpyTable({ notebook: env.notebook, events: events });
+
+    return { NumpyTable: NumpyTable, create_numpy_table: create_numpy_table };
   }
 );

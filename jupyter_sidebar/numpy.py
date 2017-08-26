@@ -3,8 +3,22 @@
 
 import sys
 import json
+import types
 import numpy as np
-import jupyter_sidebar
+
+MODULES = set([sys.modules['__main__']])
+
+
+def monitor(module):
+    if isinstance(module, types.ModuleType):
+        MODULES.add(module)
+    else:
+        raise TypeError('not module type')
+
+
+def unmonitor(module):
+    if module in MODULES:
+        MODULES.remove(module)
 
 
 def _ndarray_info(var):
@@ -16,7 +30,7 @@ def _ndarray_info(var):
 
 def report():
     data = []
-    for m in jupyter_sidebar.MODULES:
+    for m in MODULES:
         data += [
             (m.__name__, n, *_ndarray_info(getattr(m, n))) for n in dir(m)
             if isinstance(getattr(m, n), np.ndarray)

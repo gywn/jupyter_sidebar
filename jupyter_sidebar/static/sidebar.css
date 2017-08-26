@@ -11,27 +11,31 @@
 }
 
 #notebook_panel {
-  overflow-y: auto; /* bug fix */
   flex: 1 0 auto;
+  overflow-y: auto; /* bug fix */
 }
 
 .resizer {
-  width: 11px;
+  flex: 0 0 auto;
   margin: 0 -5px;
-  cursor: col-resize;
+  width: 11px;
   background: url(data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=)
     repeat-y center;
-  flex: 0 0 auto;
+  cursor: col-resize;
 }
 
 .panel_resizer {
-  opacity: 0.111;
+  opacity: .111;
 }
 
 .sidebar_panel {
+  flex: 0 0 auto;
   overflow-y: auto;
   background: #f7f7f7;
-  flex: 0 0 auto;
+}
+
+.sidebar_panel.collapsed {
+  width: 5px !important;
 }
 
 .sidebar_handler {
@@ -41,8 +45,8 @@
 }
 
 .sidebar_text {
-  padding: 6px 6px 2px;
   overflow: hidden;
+  padding: 6px 6px 2px;
 }
 
 .sidebar_tr_button {
@@ -53,27 +57,28 @@
 }
 
 .sidebar_widget {
-  box-sizing: border-box;
-  font-size: 12px;
-  line-height: 17px;
   position: relative;
+  box-sizing: border-box;
   margin: 10px;
   border: 1px solid #aaa;
   border-width: 1px 1px 0;
+  font-size: 12px;
+  line-height: 17px;
 }
 
 .sidebar_header {
-  cursor: default;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  min-height: 26px;
   border-bottom: 1px solid #aaa;
   background: #ebf7ff;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: default;
 }
 
 .sidebar_widget.collapsed > .sidebar_header::after {
   margin-left: 1ex;
-  content: ". . .";
   color: #999;
+  content: ". . .";
 }
 
 .sidebar_widget.collapsed > .sidebar_body {
@@ -85,9 +90,9 @@
   overflow-x: auto;
 }
 
-.sidebar_widget:not(.collapsed) > .sidebar_tr_button {
-  display: none;
-}
+/* .sidebar_widget:not(.collapsed) > .sidebar_tr_button { */
+/*   display: none; */
+/* } */
 
 .sidebar_table_column {
   flex: 0 0 auto;
@@ -98,29 +103,29 @@
 }
 
 .sidebar_table_body > .resizer {
-  opacity: 0.333;
+  opacity: .333;
 }
 
 .sidebar_table_cell {
-  font-family: "Lucida Console", Monaco, monospace; /* use 0.75em as advance width */
   box-sizing: border-box;
   height: 26px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
   border-bottom: 1px solid #aaa;
   background: white;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "Lucida Console", Monaco, monospace;
 }
 
 .sidebar_table_cell:nth-child(even) {
-  background: #f8f8f8;
+  background: #fafafa;
 }
 
 .sidebar_table_cell > span.jsb_type {
   display: inline-block;
   margin: -4px -4px 0;
   padding: 4px 4px 0;
-  color: white;
   border-radius: 4px;
+  color: white;
 }
 
 .jsb_other {
@@ -158,16 +163,16 @@
 }
 
 .sidebar_table_info {
-  font-style: italic;
   border-bottom: 1px solid #aaa;
   background: white;
+  font-style: italic;
 }
 
 .sidebar_line {
-  font-family: "Lucida Console", Monaco, monospace; /* use 0.75em as advance width */
   overflow: hidden;
   border-bottom: 1px solid #aaa;
   background: white;
+  font-family: "Lucida Console", Monaco, monospace; /* use 0.75em as advance width */
 }
 
 .sidebar_line:nth-child(even) {

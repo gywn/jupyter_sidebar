@@ -6,12 +6,11 @@ define(
   [
     'require',
     'jquery',
-    'base/js/namespace',
-    'base/js/events',
     'base/js/utils',
-    'nbextensions/jupyter_sidebar/resized-by'
+    'notebook/js/notebook',
+    'nbextensions/jupyter_sidebar/resize-handle'
   ],
-  (require, $, env, events, utils) => {
+  (require, $, utils, nbmod) => {
     $('head').append(
       $('<link/>', {
         type: 'text/css',
@@ -19,6 +18,24 @@ define(
         href: require.toUrl('./sidebar.css')
       })
     );
+
+    const _ = el => $(el).data('jupyter-ui');
+
+    // Extended on Jquery UI 1.10 though might work further
+    // not safe to use during _contactContainers (i.e. "change", "over", and "out" events)
+    $.ui.sortable.prototype._refreshContainersAndCache = function() {
+      this.containers = [this];
+      var ctns = this._connectWith();
+      if (!(ctns.length > 0 && this.ready)) return;
+      if (ctns.constructor === Array) ctns = ctns.reduce((s, w) => s.add(w), $());
+
+      ctns.each((i, c) => {
+        const inst = $.data(c, this.widgetFullName);
+        if (inst && inst !== this && !inst.options.disabled) this.containers.push(inst);
+      });
+
+      this.refreshPositions();
+    };
 
     /**
      * A default config entry in config.data.Sidebar
@@ -55,31 +72,57 @@ define(
       }
     };
 
-    const layout_adjust = () =>
-      $('.sidebar_panel').each((i, sidebar) => $(sidebar).data('model').adjust_width());
+    const main_app = $('#ipython-main-app');
 
-    const layout_resort_and_adjust = () => {
-      const widget_order = widget => $(widget).data('model').config.get('order');
+    const $app = main_app.find.bind(main_app);
 
-      $('.sidebar_panel > .sidebar_widget').each((i, widget) => {
-        const sidebar_id = $(widget).data('model').config.get('sidebar_id');
-        if (!sidebar_id) return;
-        const dest = $(`.sidebar_panel[data-id="${sidebar_id}"]`);
-        if (dest.length > 0) dest.append(widget);
-      });
-
-      $('.sidebar_panel').each((i, sidebar) =>
-        $(sidebar)
-          .find('> .sidebar_widget')
-          .toArray()
-          .sort((a, b) => widget_order(a) - widget_order(b))
-          .forEach(widget => $(sidebar).append(widget))
+    const add_sidebar_resizers = () =>
+      $app('> :not(:last-child)').each((i, el) =>
+        $(el).after(
+          $('<div/>', { class: 'resizer panel_resizer' }).resizeHandle({
+            active: '.sidebar_panel:not(.empty)',
+            sink: '#notebook_panel',
+            stop: (e, handle, elems) =>
+              elems.forEach(el => _(el).config.set('width', $(el).width()))
+          })
+        )
       );
 
-      layout_adjust();
+    const clean_up_sidebars = ({ addEmptySidebar, notebook }) => {
+      $app('> .panel_resizer').remove();
+
+      $app('> .sidebar_panel:not(:has(> .sidebar_widget))').each((i, s) => {
+        _(s).destruct();
+        $(s).remove();
+      });
+
+      if (addEmptySidebar) {
+        const sidebar_ids = $app('> .sidebar_panel').map((i, s) => s.dataset.id).toArray();
+        const new_sidebar_ids = [];
+        var i = 0;
+        while (new_sidebar_ids.length < 2) {
+          const sidebar_id = `sidebar-${i}`;
+          if (sidebar_ids.indexOf(sidebar_id) === -1) new_sidebar_ids.push(sidebar_id);
+          i++;
+        }
+
+        const nbp = $app('#notebook_panel'),
+          empty_selector =
+            '.sidebar_panel:not(:has(> .sidebar_widget:not(.ui-sortable-helper, .ui-sortable-placeholder)))';
+        if (nbp.prev(empty_selector).length === 0)
+          nbp.before(new Sidebar({ notebook: notebook, id: new_sidebar_ids[0] }).element);
+        if (nbp.next(empty_selector).length === 0)
+          nbp.after(new Sidebar({ notebook: notebook, id: new_sidebar_ids[1] }).element);
+      }
+
+      add_sidebar_resizers();
     };
 
-    const main_app = $('#ipython-main-app');
+    const set_sidebars_config = () => {
+      const nbp = $app('#notebook_panel');
+      nbp.prevAll('.sidebar_panel').each((i, s) => _(s).config.set({ order: i - 128 }));
+      nbp.nextAll('.sidebar_panel').each((i, s) => _(s).config.set({ order: i + 1 }));
+    };
 
     /**
      * Contains sidebar widgets
@@ -90,52 +133,43 @@ define(
      * @param {string}          options.position - left|right
      * @param {float}           options.widgetAnimationDuration
      */
-    function Sidebar({ notebook, id, position }) {
+    function Sidebar({ notebook, id }) {
       this.id = id || utils.uuid();
       this.notebook = notebook;
-      this.config = new SidebarConfigEntry(this.notebook.config, id, Sidebar.default_config, {
-        position: position
-      });
+      this.config = new SidebarConfigEntry(this.notebook.config, id, Sidebar.default_config);
       Sidebar.prototype.create_element.call(this);
-      layout_resort_and_adjust();
     }
 
-    Sidebar.default_config = { width: 300, position: 'right' };
+    Sidebar.default_config = { width: 300, order: 1 };
 
     // @final
     Sidebar.prototype.create_element = function() {
-      this.resizer = $('<div/>', { class: 'resizer panel_resizer' });
-      this.element = $('<div/>', { class: 'sidebar_panel' })
-        .data('model', this)
-        .resizedBy({
-          handleSelector: this.resizer,
-          resizeWidthFrom: this.config.get('position') === 'left' ? 'right' : 'left',
-          resizeHeight: false,
-          onDragEnd: () => this.config.set('width', this.element.width()),
-          enable: () => !this.element.hasClass('collapsed')
-        })
-        .sortable({
-          connectWith: '.sidebar_panel',
-          items: '> .sidebar_widget',
-          handle: '.sidebar_header',
-          forcePlaceholderSize: true,
-          tolerance: 'pointer',
-          change: layout_adjust,
-          update: Sidebar.prototype.set_widgets_config.bind(this)
-        });
+      this.element = $('<div/>', { class: 'sidebar_panel' }).data('jupyter-ui', this).sortable({
+        connectWith: '.sidebar_panel',
+        items: '> .sidebar_widget',
+        handle: '.sidebar_header',
+        tolerance: 'pointer',
+        start: e => {
+          clean_up_sidebars({ addEmptySidebar: true, notebook: this.notebook });
+          this.element.data('ui-sortable')._refreshContainersAndCache();
+        },
+        update: () => Sidebar.prototype.set_widgets_config.call(this),
+        stop: () => {
+          clean_up_sidebars({ addEmptySidebar: false });
+          set_sidebars_config();
+        }
+      });
+      new MutationObserver(mut => this.adjust_width()).observe(this.element.get(0), {
+        childList: true
+      });
       this.element.get(0).dataset.id = this.id;
-      this.handler = $('<div/>', { class: 'sidebar_handler' });
-      this.element.append(this.handler);
-      if (this.config.get('position') === 'left') {
-        main_app.prepend([this.element, this.resizer]);
-      } else {
-        main_app.append([this.resizer, this.element]);
-      }
+      this.handle = $('<div/>', { class: 'sidebar_handle' });
+      this.element.append(this.handle);
 
       this.adjust_width();
 
       // Menu item
-      // const toggle_sidebar_handle = () => $('.sidebar_panel, .resizer_panel').toggle(),
+      // const toggle_sidebar_handle = () => $app('> .sidebar_panel, > .resizer_panel').toggle(),
       //   toggle_sidebar = $(`
       // <li id="toggle_sidebar" title="Show/Hide sidebar">
       // <a href="#">Toggle Sidebar</a>
@@ -143,7 +177,7 @@ define(
       //     .click(toggle_sidebar_handle)
       //     .appendTo($('#view_menu'));
       // env.actions.register(
-      //   { handler: toggle_sidebar_handle },
+      //   { handle: toggle_sidebar_handle },
       //   'toggle-sidebar',
       //   'notebook-sidebar'
       // );
@@ -151,26 +185,22 @@ define(
 
     // @final
     Sidebar.prototype.set_widgets_config = function() {
-      console.log(this, 'set_widgets_config');
       this.element
-        .find('> .sidebar_widget:not(.ui-sortable-placeholder)')
-        .each((i, w) => $(w).data('model').config.set({ sidebar_id: this.id, order: i }));
+        .find('> .sidebar_widget')
+        .each((i, w) => _(w).config.set({ sidebar_id: this.id, order: i }));
     };
 
     Sidebar.prototype.adjust_width = function() {
-      if (
-        this.element.find(
-          '> .sidebar_widget:not(.ui-sortable-helper), > .ui-sortable-placeholder'
-        ).length > 0
-      ) {
+      if (this.element.find('> .sidebar_widget:not(.ui-sortable-helper)').length > 0) {
         this.element
-          .removeClass('collapsed')
+          .removeClass('empty')
           .width(this.config.get('width'))
           .find('> .sidebar_widget')
           .show();
       } else {
         this.element
-          .addClass('collapsed')
+          .addClass('empty')
+          .width(10)
           .find('> .sidebar_widget:not(.ui-sortable-helper)')
           .hide();
       }
@@ -179,8 +209,17 @@ define(
 
     Sidebar.prototype.add_widget = function(widget) {
       this.element.append(widget.element);
-      layout_resort_and_adjust();
-      return this;
+      const get_order = el => _(el).config.get('order');
+      this.element
+        .find('> .sidebar_widget')
+        .sort((a, b) => get_order(a) - get_order(b))
+        .appendTo(this.element);
+
+      this.adjust_width();
+    };
+
+    Sidebar.prototype.destruct = function() {
+      this.element.find('> .sidebar_widget').each((i, w) => _(w).destruct());
     };
 
     /**
@@ -193,8 +232,9 @@ define(
      */
     function Widget({ notebook, header }) {
       this.id = header ? header.replace(/[ '"]/g, '-').toLowerCase() : utils.uuid();
+      this.notebook = notebook;
       this.config = new SidebarConfigEntry(
-        notebook.config,
+        this.notebook.config,
         header ? this.id : null,
         Widget.default_config
       );
@@ -202,11 +242,15 @@ define(
       Widget.prototype.update_header.call(this, header);
     }
 
-    Widget.default_config = { order: Number.MAX_SAFE_INTEGER, collapsed: false };
+    Widget.default_config = {
+      order: Number.MAX_SAFE_INTEGER,
+      collapsed: false,
+      sidebar_id: 'sidebar-0'
+    };
 
     // @final
     Widget.prototype.create_element = function() {
-      this.element = $('<div/>', { class: 'sidebar_widget' }).data('model', this);
+      this.element = $('<div/>', { class: 'sidebar_widget' }).data('jupyter-ui', this);
       this.element.get(0).dataset.id = this.id;
       this.header = $('<div/>', { class: 'sidebar_header sidebar_text' }).click(
         () => (this.config.get('collapsed') ? this.expand() : this.collapse())
@@ -231,16 +275,7 @@ define(
       this.config.set('collapsed', true);
     };
 
-    Widget.prototype.detach = function() {
-      const parent = this.element.closest('.sidebar_panel');
-      this.element.detach();
-      if (parent) $(parent).data('model').adjust_width();
-      return this;
-    };
-
-    Widget.prototype.remove = function() {
-      Widget.prototype.detach.call(this).element.remove();
-    };
+    Widget.prototype.destruct = function() {};
 
     /**
      * Table widget
@@ -277,8 +312,10 @@ define(
         tbody.append(col);
         this.columns.push(col);
         if (i !== nColumn - 1) {
-          const resizer = $('<div/>', { class: 'resizer' });
-          col.resizedBy({ handleSelector: resizer, resizeHeight: false });
+          const resizer = $('<div/>', { class: 'resizer' }).resizeHandle({
+            active: '.sidebar_table_column',
+            sink: '.sidebar_table_column:last-of-type'
+          });
           tbody.append(resizer);
         }
       }
@@ -345,13 +382,11 @@ define(
      * @param {object}          options - Dictionary of keyword arguments.
      * @param {string}          options.header
      * @param {object}          options.notebook
-     * @param {object}          options.events
      * @param {string}          options.command
      */
     function CommandOutput(options) {
       Widget.call(this, options);
       this.notebook = options.notebook;
-      this.events = options.events;
       this.command = options.command;
 
       CommandOutput.prototype.create_element.call(this);
@@ -377,15 +412,15 @@ define(
 
     // @final
     CommandOutput.prototype.bind_events = function() {
-      this.events.on('kernel_ready.Kernel', this.callback);
-      this.events.on('finished_execute.CodeCell', this.callback);
+      this.notebook.events.on('kernel_ready.Kernel', this.callback);
+      this.notebook.events.on('finished_execute.CodeCell', this.callback);
       if (this.notebook.kernel !== null) this.callback();
     };
 
     // @final
     CommandOutput.prototype.unbind_events = function() {
-      this.events.off('kernel_ready.Kernel', this.callback);
-      this.events.off('finished_execute.CodeCell', this.callback);
+      this.notebook.events.off('kernel_ready.Kernel', this.callback);
+      this.notebook.events.off('finished_execute.CodeCell', this.callback);
     };
 
     CommandOutput.prototype.expand = function() {
@@ -393,9 +428,9 @@ define(
       this.callback();
     };
 
-    CommandOutput.prototype.remove = function() {
+    CommandOutput.prototype.destruct = function() {
       CommandOutput.prototype.unbind_events.call(this);
-      Widget.prototype.remove.call(this);
+      Widget.prototype.destruct.call(this);
     };
 
     /**
@@ -425,31 +460,47 @@ define(
         });
       });
 
-    const create_sidebar = id => {
-      const n = $('.sidebar_panel').length;
-      return new Sidebar({
-        notebook: env.notebook,
-        id: id || `sidebar-${n}`,
-        position: n % 2 ? 'left' : 'right'
-      });
+    nbmod.Notebook.prototype.add_sidebar_widget = function(widget) {
+      if (widget.notebook !== this) return false;
+      const sidebar_id = widget.config.get('sidebar_id');
+      var sidebar = $app(`> .sidebar_panel[data-id="${sidebar_id}"]`);
+      if (sidebar.length > 0) {
+        sidebar = _(sidebar);
+        if (sidebar.notebook !== this) return false;
+        sidebar.add_widget(widget);
+      } else {
+        sidebar = new Sidebar({ notebook: this, id: sidebar_id });
+        sidebar.add_widget(widget);
+
+        const get_order = el => (el.id === 'notebook_panel' ? 0 : _(el).config.get('order'));
+        $app('> .panel_resizer').remove();
+        main_app.append(sidebar.element);
+        $app('> .sidebar_panel, > #notebook_panel')
+          .sort((a, b) => get_order(a) - get_order(b))
+          .appendTo(main_app);
+        add_sidebar_resizers();
+      }
+      return true;
     };
 
-    const create_command_output = (header, command) =>
-      new CommandOutput({
-        notebook: env.notebook,
-        events: events,
-        header: header,
-        command: command
-      });
+    nbmod.Notebook.prototype.remove_sidebar_widget = function(widget) {
+      if (widget.notebook !== this) return false;
+      const sidebar = widget.element.closest('.sidebar_panel');
+      widget.destruct();
+      widget.element.remove();
+      if (sidebar.find('> .sidebar_widget').length === 0) {
+        _(sidebar).destruct();
+        sidebar.remove();
+      }
+      return true;
+    };
 
     return {
       Sidebar: Sidebar,
       Widget: Widget,
       Table: Table,
       CommandOutput: CommandOutput,
-      call_kernel: call_kernel,
-      create_sidebar: create_sidebar,
-      create_command_output: create_command_output
+      call_kernel: call_kernel
     };
   }
 );

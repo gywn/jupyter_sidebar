@@ -3,20 +3,24 @@
 /* global define */
 
 define(
-  ['nbextensions/jupyter_sidebar/sidebar', 'nbextensions/jupyter_sidebar/numpy'],
-  (sidebarmod, sidebar_numpy) => {
-    // Sidebars are added in order of right-left-right-left...
-    const right_sidebar = sidebarmod.create_sidebar();
-    const left_sidebar = sidebarmod.create_sidebar();
-
+  [
+    'base/js/namespace',
+    'nbextensions/jupyter_sidebar/sidebar',
+    'nbextensions/jupyter_sidebar/numpy'
+  ],
+  (_, sidebarmod, sidebar_numpy) => {
     // Create and add the Numpy variables inspector
-    const np_table = sidebar_numpy.create_numpy_table();
-    right_sidebar.add_widget(np_table);
+    const np_table = new sidebar_numpy.NumpyTable({
+      notebook: _.notebook
+    });
+
+    _.notebook.add_sidebar_widget(np_table);
 
     // Create and add the welcoming message
-    const msg = sidebarmod.create_command_output(
-      'Welcoming Message',
-      `
+    const msg = new sidebarmod.CommandOutput({
+      notebook: _.notebook,
+      header: 'Welcoming Message',
+      command: `
 def __jsb_msg():
   from jupyter_core.paths import jupyter_data_dir, jupyter_path
   import os
@@ -34,10 +38,11 @@ or disable the default setting by running:
 and write your own setting.""".format(path))
           break
 __jsb_msg()`
-    );
-    right_sidebar.add_widget(msg);
+    });
+
+    _.notebook.add_sidebar_widget(msg);
 
     // Uncomment this line to turn off the message
-    // msg.remove();
+    // _.notebook.remove_sidebar_widget(msg);
   }
 );

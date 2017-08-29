@@ -386,7 +386,6 @@ define(
      */
     function CommandOutput(options) {
       Widget.call(this, options);
-      this.notebook = options.notebook;
       this.command = options.command;
 
       CommandOutput.prototype.create_element.call(this);

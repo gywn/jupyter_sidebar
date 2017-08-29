@@ -18,7 +18,6 @@ define(['nbextensions/jupyter_sidebar/sidebar'], sidebar => {
       header: 'Numpy Variables Inspector',
       nColumn: 4
     });
-    this.notebook = notebook;
 
     this.update.call(this, {
       onRender: ([module, name, type, shape, addr]) => [

@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name='jupyter_sidebar',
-    version='0.1.0',
+    version='0.1',
     description='Sidebar extension for Jupyter',
     packages=['jupyter_sidebar'],
     package_data={

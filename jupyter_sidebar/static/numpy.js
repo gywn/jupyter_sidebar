@@ -28,12 +28,17 @@ define(['nbextensions/jupyter_sidebar/sidebar'], sidebar => {
         '<span class=jsb_addr_prefix>0x</span>\u200a' + (+addr).toString(16).padStart(16, '0')
       ],
       onSort: [
-        ([module, name, type, shape, addr]) => [module === '__main__' ? 0 : 1, module, name],
+        ([module, name, type, shape, addr]) => [
+          module === '__main__' ? 0 : 1,
+          module,
+          name.match(/^_/) ? (name.match(/^_\d/) ? 2 : 1) : 0,
+          name
+        ],
         ([module, name, type, shape, addr]) => type,
         ([module, name, type, shape, addr]) => shape.reduce((sum, dim) => sum * dim, -1),
         ([module, name, type, shape, addr]) => addr
       ],
-      sortIndex: 3
+      sortIndex: 0
     });
 
     this.callback = () => {

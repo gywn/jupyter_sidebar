@@ -10,5 +10,7 @@ setup(
     packages=['jupyter_sidebar'],
     package_data={
         'jupyter_sidebar': ['static/*']
-    }
+    },
+    url='https://github.com/gywn/jupyter_sidebar',
+    download_url='https://github.com/gywn/jupyter_sidebar/archive/0.1.tar.gz'
 )

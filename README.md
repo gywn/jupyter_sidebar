@@ -18,10 +18,15 @@ Installation
 Three steps are required to install this Jupyter extension:
 
 1\. Install the Python package:
+
     pip install jupyter_sidebar
+    
 2\. Register the extension in Jupyter:
+
     jupyter nbextension install --py jupyter_sidebar
+    
 3\. Enable the extension:
+
     jupyter nbextension enable --py jupyter_sidebar
 
 Supported Environment

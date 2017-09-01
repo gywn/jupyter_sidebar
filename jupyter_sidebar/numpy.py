@@ -22,17 +22,14 @@ def unmonitor(module):
 
 
 def _ndarray_info(var):
-    return [
-        var.dtype.char, var.shape,
-        var.__array_interface__['data'][0]
-    ]
+    return var.dtype.char, var.shape, var.__array_interface__['data'][0]
 
 
 def report():
     data = []
     for m in MODULES:
         data += [
-            tuple(m.__name__, n, *_ndarray_info(getattr(m, n))) for n in dir(m)
+            (m.__name__, n) + _ndarray_info(getattr(m, n)) for n in dir(m)
             if isinstance(getattr(m, n), np.ndarray)
         ]
     json.dump(data, sys.stdout)
